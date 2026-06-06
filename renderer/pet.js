@@ -160,11 +160,20 @@ let speechTimer = null;
 function showSpeech(text, durationMs) {
   const bubble = document.getElementById("pet-speech-bubble");
   const bubbleText = bubble ? bubble.querySelector(".bubble-text") : null;
-  if (!bubble || !bubbleText || !text) return;
+  if (!bubble || !bubbleText) return;
 
   if (speechTimer) {
     clearTimeout(speechTimer);
     speechTimer = null;
+  }
+
+  // 清除打字指示器
+  const typing = bubble.querySelector(".bubble-typing");
+  if (typing) typing.remove();
+
+  if (!text) {
+    bubble.classList.remove("show-bubble");
+    return;
   }
 
   bubbleText.textContent = text;
@@ -172,6 +181,36 @@ function showSpeech(text, durationMs) {
 
   speechTimer = setTimeout(() => {
     bubble.classList.remove("show-bubble");
+    speechTimer = null;
+  }, durationMs);
+}
+
+// 显示打字指示器（running 状态，无文字时）
+function showTyping(durationMs) {
+  const bubble = document.getElementById("pet-speech-bubble");
+  const bubbleText = bubble ? bubble.querySelector(".bubble-text") : null;
+  if (!bubble) return;
+
+  if (speechTimer) {
+    clearTimeout(speechTimer);
+    speechTimer = null;
+  }
+
+  // 清空文字，添加打字指示器
+  if (bubbleText) bubbleText.textContent = "";
+  if (!bubble.querySelector(".bubble-typing")) {
+    const typing = document.createElement("span");
+    typing.className = "bubble-typing";
+    typing.innerHTML = "<span></span><span></span><span></span>";
+    bubble.appendChild(typing);
+  }
+
+  bubble.classList.add("show-bubble");
+
+  speechTimer = setTimeout(() => {
+    bubble.classList.remove("show-bubble");
+    const t = bubble.querySelector(".bubble-typing");
+    if (t) t.remove();
     speechTimer = null;
   }, durationMs);
 }
@@ -438,6 +477,9 @@ function handleStatusUpdate(engine, { status, message }) {
       // 只有真正需要确认时才闪烁
       container.classList.add("waiting-blink");
     }
+  } else if (status === "running") {
+    // running 状态：显示打字指示器
+    showTyping(999999);
   } else {
     const msg = message || STATUS_MESSAGES[status] || "";
     if (msg) {
