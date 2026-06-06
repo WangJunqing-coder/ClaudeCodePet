@@ -1,12 +1,11 @@
 // CCPet Claude Code Hook 通知脚本
-// 参考 clawd-on-desk 的状态映射逻辑
-// Claude Code 通过 argv[2] 传入事件名，stdin 传入 JSON payload
+// 参考 clawd-on-desk 的状态映射 + 气泡内容格式化
 
 const http = require("http");
 
 const PORT = 31126;
 
-// ── 事件 → 状态映射（参考 clawd-on-desk） ──
+// ── 事件 → 状态映射 ──
 const EVENT_TO_STATUS = {
   SessionStart: "idle",
   SessionEnd: "idle",
@@ -22,10 +21,45 @@ const EVENT_TO_STATUS = {
   SubagentStop: "running",
   PreCompact: "running",
   PostCompact: "running",
-  WorktreeCreate: "running",
 };
 
-// 旧格式兼容：直接传了 status 而非事件名
+// ── 工具详情格式化（参考 clawd-on-desk bubble-format.js） ──
+function formatToolDetail(toolName, toolInput) {
+  if (!toolName || !toolInput) return "";
+
+  const name = toolName;
+
+  if (name === "Bash" && toolInput.command) {
+    return truncate(toolInput.command, 80);
+  }
+  if ((name === "Edit" || name === "Write" || name === "Read") && toolInput.file_path) {
+    return truncate(toolInput.file_path, 80);
+  }
+  if ((name === "Glob" || name === "Grep") && toolInput.pattern) {
+    return truncate(toolInput.pattern, 80);
+  }
+  if (name === "WebFetch" && toolInput.url) {
+    return truncate(toolInput.url, 80);
+  }
+  if (name === "WebSearch" && toolInput.query) {
+    return truncate(toolInput.query, 80);
+  }
+  if (name === "Agent" && toolInput.prompt) {
+    return truncate(toolInput.prompt, 80);
+  }
+  if (typeof toolInput.description === "string" && toolInput.description.trim()) {
+    return truncate(toolInput.description.trim(), 80);
+  }
+  return "";
+}
+
+function truncate(s, max) {
+  if (typeof s !== "string") return "";
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + "…";
+}
+
+// 旧格式兼容
 const LEGACY_STATUS = new Set(["idle", "running", "waiting", "completed", "error"]);
 
 let done = false;
@@ -38,7 +72,6 @@ process.stdin.on("end", () => {
   processEvent();
 });
 
-// 超时回退：stdin 2 秒内没关闭就直接处理
 setTimeout(() => {
   if (done) return;
   done = true;
@@ -53,42 +86,52 @@ function processEvent() {
     payload = JSON.parse(inputData);
   } catch (e) {}
 
-  // ── 旧格式兼容：argv[2] 直接是 status（running/completed/error） ──
+  // 旧格式兼容
   if (LEGACY_STATUS.has(argv2)) {
     const message = process.argv[3] || "";
     sendStatus(argv2, message);
     return;
   }
 
-  // ── 新格式：argv[2] 是事件名 ──
   let event = argv2;
   if (!event) {
     event = payload.type || payload.hook_event_type || "";
   }
 
   const baseStatus = EVENT_TO_STATUS[event];
-
-  // 未知事件 → 默认 running（兜底）
   if (!baseStatus) {
     sendStatus("running", "");
     return;
   }
 
-  // ── Stop 事件：判断是否真正完成 ──
+  // ── Stop 事件 ──
   if (event === "Stop") {
-    // 有后台任务或 cron → Claude 还在继续，不判定为完成
     const bgCount = Array.isArray(payload.background_tasks) ? payload.background_tasks.length : 0;
     const cronCount = Array.isArray(payload.session_crons) ? payload.session_crons.length : 0;
     if (bgCount > 0 || cronCount > 0) {
       sendStatus("running", "");
       return;
     }
-    // 没有后续工作 → 任务完成
     sendStatus("completed", "");
     return;
   }
 
-  // ── 其他事件（含 Notification）──
+  // ── PostToolUse：显示工具详情 ──
+  if (event === "PostToolUse" || event === "PreToolUse") {
+    const toolName = payload.tool_name || "";
+    const detail = formatToolDetail(toolName, payload.tool_input || {});
+    const message = detail ? `${toolName}: ${detail}` : toolName;
+    sendStatus("running", message);
+    return;
+  }
+
+  // ── UserPromptSubmit ──
+  if (event === "UserPromptSubmit") {
+    sendStatus("running", "思考中...");
+    return;
+  }
+
+  // ── 其他事件 ──
   sendStatus(baseStatus, "");
 }
 

@@ -469,17 +469,19 @@ function handleStatusUpdate(engine, { status, message }) {
 
   // 显示气泡
   if (status === "waiting") {
-    // waiting + 有消息 = Claude Code 需要确认（Notification 事件）
-    // waiting + 无消息 = Claude 本轮响应结束，可能还会继续（Stop 事件）
     const msg = message || STATUS_MESSAGES[status];
     showSpeech(msg, message ? 999999 : 3000);
     if (message && container) {
-      // 只有真正需要确认时才闪烁
       container.classList.add("waiting-blink");
     }
   } else if (status === "running") {
-    // running 状态：显示打字指示器
-    showTyping(999999);
+    // running + 有工具详情消息 → 显示具体在做什么
+    // running + 无消息 → 显示打字指示器
+    if (message) {
+      showSpeech(message, 999999);
+    } else {
+      showTyping(999999);
+    }
   } else {
     const msg = message || STATUS_MESSAGES[status] || "";
     if (msg) {
