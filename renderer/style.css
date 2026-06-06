@@ -1,0 +1,239 @@
+﻿/* ─── 基础重置 ─────────────────────────────────────── */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    position: relative;
+
+    background-color: transparent !important;
+    pointer-events: none; /* 默认穿透：透明区域不阻挡下方屏幕 */
+    user-select: none;
+    -webkit-user-select: none;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+/* ─── 固定舞台 ───────────────────────────────────── */
+#pet-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 220px;
+    height: 200px;
+    overflow: hidden;
+    pointer-events: none;
+    transform-origin: top left;
+}
+
+/* ─── 宠物容器 ──────────────────────────────────── */
+#pet-container {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+
+    transform: translateX(-50%) scale(0.55);
+    transform-origin: bottom center;
+    width: 192px; /* 固定宽度，永不改变 */
+    height: 208px; /* 固定高度，永不改变 */
+    overflow: hidden; /* 防止拖拽/动画切帧时精灵图溢出导致视觉上容器变宽 */
+    pointer-events: none;
+    /* 刻意不设 transition：拖拽时只移动窗口，不改变容器尺寸/缩放，保证宠物跟手 */
+}
+
+#pet-sprite {
+    width: 192px;
+    height: 208px;
+    overflow: hidden;
+    background-repeat: no-repeat;
+    background-image: url("spritesheet.webp");
+    filter: url(#remove-fringe);
+    pointer-events: none;
+}
+
+#pet-hitbox {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 63%;
+    height: 78%;
+    border-radius: 30%;
+    pointer-events: auto; /* 唯一可交互区域 */
+    cursor: grab;
+    -webkit-user-drag: none;
+    background-color: transparent;
+    border: none;
+}
+
+#pet-hitbox:active {
+    cursor: grabbing;
+}
+
+/* is-lifting / is-dropping：不再改变 transform，仅做标记供 JS 读取状态 */
+/* 任何 transform 形变都会在 is-dropping 移除时触发 pet-enter 动画重播（Chromium 行为）*/
+
+/* ─── 气泡对话框 ─────────────────────────────────── */
+#pet-speech-bubble {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    transform: translateX(-50%) translateY(-6px) scale(0.96);
+    width: max-content;
+    max-width: 140px;
+    max-height: 44px;
+    overflow: hidden;
+    padding: 6px 10px;
+
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: #333333;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    opacity: 0;
+    transition:
+        opacity 0.3s ease,
+        transform 0.3s ease;
+    z-index: 10001;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: center;
+}
+
+#pet-speech-bubble::after {
+    display: none;
+}
+
+#pet-speech-bubble.show-bubble {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* ─── 粒子 ─────────────────────────────────────── */
+
+.particle {
+    position: fixed;
+    width: 24px;
+    height: 24px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 10000;
+    animation: float-up 0.6s ease-out forwards;
+}
+
+@keyframes float-up {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-50px) scale(1.5);
+    }
+}
+
+/* ─── 右键菜单 ──────────────────────────────────── */
+#context-menu {
+    position: fixed;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 3px 0;
+    min-width: 130px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 99999;
+    pointer-events: auto;
+}
+
+.menu-item {
+    padding: 4px 12px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-item-danger {
+    color: rgba(255, 100, 100, 0.9);
+}
+
+.menu-item-danger:hover {
+    background: rgba(255, 60, 60, 0.15);
+}
+
+.menu-separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 2px 0;
+}
+
+/* ─── 入场动画 ──────────────────────────────────── */
+/* 改为 .pet-entering class 触发，由 JS 在启动时添加、动画结束后立即移除，
+   确保动画只播放一次，不会因后续 class 变化被 Chromium 重新触发 */
+@keyframes pet-enter {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(30px) scale(0.4);
+    }
+    60% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-5px) scale(0.58);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(-50%) scale(0.55);
+    }
+}
+
+#pet-container.pet-entering {
+    animation: pet-enter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+
+/* ─── 拖拽反馈 ──────────────────────────────────── */
+#pet-container.is-lifting {
+    transform: translateX(-50%) scale(0.55) scaleY(1.06) scaleX(0.94) !important;
+}
+
+#pet-container.is-dropping {
+    transform: translateX(-50%) scale(0.55) scaleY(0.88) scaleX(1.12) !important;
+    transition: transform 0.15s ease-out !important;
+}
+/* ─── Waiting 闪烁 ──────────────────────────────── */
+#pet-container.waiting-blink {
+    animation: waiting-blink-anim 1.2s ease-in-out infinite;
+}
+
+@keyframes waiting-blink-anim {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* body.drag-active 备用（当前无 transition 所以也无需这条，保留供扩展）*/
+body.drag-active #pet-container {
+    transition: none;
+}
