@@ -16,7 +16,7 @@ const EVENT_TO_STATUS = {
   PostToolUseFailure: "error",
   Stop: "waiting",
   StopFailure: "error",
-  Notification: "waiting",
+  Notification: "running",
   Elicitation: "waiting",
   SubagentStart: "running",
   SubagentStop: "running",
@@ -76,28 +76,19 @@ function processEvent() {
 
   // ── Stop 事件：判断是否真正完成 ──
   if (event === "Stop") {
-    if (payload.stop_hook_active === true) {
-      sendStatus("running", "");
-      return;
-    }
+    // 有后台任务或 cron → Claude 还在继续，不判定为完成
     const bgCount = Array.isArray(payload.background_tasks) ? payload.background_tasks.length : 0;
     const cronCount = Array.isArray(payload.session_crons) ? payload.session_crons.length : 0;
     if (bgCount > 0 || cronCount > 0) {
       sendStatus("running", "");
       return;
     }
+    // 没有后续工作 → 任务完成
     sendStatus("completed", "");
     return;
   }
 
-  // ── Notification 事件 ──
-  if (event === "Notification") {
-    const message = payload.message || "有操作需要你的确认";
-    sendStatus("waiting", message);
-    return;
-  }
-
-  // ── 其他事件 ──
+  // ── 其他事件（含 Notification）──
   sendStatus(baseStatus, "");
 }
 
