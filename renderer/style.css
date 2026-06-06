@@ -83,7 +83,7 @@ body {
 #pet-speech-bubble {
     position: absolute;
     left: 50%;
-    top: 4px;
+    top: 12px;
     transform: translateX(-50%) translateY(-6px);
     width: max-content;
     max-width: 200px;
