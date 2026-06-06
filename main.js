@@ -217,7 +217,7 @@ function startApp() {
     ];
 
     let changed = false;
-    const events = ["PostToolUse", "Stop", "Notification"];
+    const events = ["PreToolUse", "PostToolUse", "Stop", "Notification"];
 
     for (const event of events) {
       if (!settings.hooks[event]) {

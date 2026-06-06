@@ -7,6 +7,7 @@ const PORT = 31126;
 
 // hook event_type → 宠物状态映射
 const EVENT_TO_STATUS = {
+  PreToolUse: "running",
   PostToolUse: "running",
   Stop: "completed",
   Notification: "waiting",
