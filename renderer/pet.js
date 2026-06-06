@@ -57,7 +57,7 @@ const STATUS_TO_ANIMATION = {
 const STATUS_MESSAGES = {
   idle: "等待 Claude Code 启动",
   running: "正在处理...",
-  waiting: "需要你的确认！",
+  waiting: "等待中...",
   completed: "任务完成！🎄",
   error: "出现错误 😩",
 };
@@ -429,14 +429,20 @@ function handleStatusUpdate(engine, { status, message }) {
   engine.applyState(animState);
 
   // 显示气泡
-  const msg = message || STATUS_MESSAGES[status] || "";
-  if (msg) {
-    showSpeech(msg, status === "waiting" ? 999999 : 4000);
-  }
-
-  // waiting 状态闪烁
-  if (status === "waiting" && container) {
-    container.classList.add("waiting-blink");
+  if (status === "waiting") {
+    // waiting + 有消息 = Claude Code 需要确认（Notification 事件）
+    // waiting + 无消息 = Claude 本轮响应结束，可能还会继续（Stop 事件）
+    const msg = message || STATUS_MESSAGES[status];
+    showSpeech(msg, message ? 999999 : 3000);
+    if (message && container) {
+      // 只有真正需要确认时才闪烁
+      container.classList.add("waiting-blink");
+    }
+  } else {
+    const msg = message || STATUS_MESSAGES[status] || "";
+    if (msg) {
+      showSpeech(msg, status === "completed" ? 5000 : 4000);
+    }
   }
 
   // completed 状态跳一下后恢复
@@ -445,7 +451,7 @@ function handleStatusUpdate(engine, { status, message }) {
       if (currentCCStatus === "completed") {
         engine.applyState("idle");
       }
-    }, 4000);
+    }, 5000);
   }
 
   // error 状态抖一下后恢复

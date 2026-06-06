@@ -1,44 +1,79 @@
 // CCPet Claude Code Hook 通知脚本
-// Claude Code 通过 stdin 传入 hook 事件 JSON，脚本将其映射为宠物状态并推送给 CCPet
+// 参考 clawd-on-desk 的状态映射逻辑
+// Claude Code 通过 argv[2] 传入事件名，stdin 传入 JSON payload
 
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = 31126;
 
-// hook event_type → 宠物状态映射
+// ── 事件 → 状态映射（参考 clawd-on-desk） ──
+// Stop ≠ 完成！Stop 只是"本轮响应结束"，Claude 可能还在继续工作
 const EVENT_TO_STATUS = {
-  PreToolUse: "running",
-  PostToolUse: "running",
-  Stop: "completed",
-  Notification: "waiting",
+  SessionStart: "idle",
+  SessionEnd: "idle",
+  UserPromptSubmit: "running",    // 用户发消息 → 开始思考
+  PreToolUse: "running",          // 工具调用前 → 正在工作
+  PostToolUse: "running",         // 工具调用后 → 正在工作
+  PostToolUseFailure: "error",
+  Stop: "waiting",                // 本轮结束 ≠ 任务完成，只是"需要注意"
+  StopFailure: "error",
+  Notification: "waiting",        // 需要用户确认
+  Elicitation: "waiting",
+  SubagentStart: "running",
+  SubagentStop: "running",
+  PreCompact: "running",
+  PostCompact: "running",
+  WorktreeCreate: "running",
 };
 
-// 从 stdin 读取 hook 事件数据
+// 从 stdin 读取 JSON payload
 let inputData = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (inputData += chunk));
 process.stdin.on("end", () => {
-  let eventType = "Stop";
-  let message = "";
+  // 事件名从 argv[2] 获取（Claude Code hook 规范）
+  const event = process.argv[2] || "Stop";
 
+  let payload = {};
   try {
-    const event = JSON.parse(inputData);
-    eventType = event.type || event.hook_event_type || "Stop";
-
-    // Notification 事件携带 message 字段（Claude Code 需要确认时的内容）
-    if (event.message) {
-      message = event.message;
-    }
-    // Stop 事件可能携带 stop_hook_active_reason
-    if (event.stop_hook_active_reason) {
-      message = event.stop_hook_active_reason;
-    }
+    payload = JSON.parse(inputData);
   } catch (e) {
-    // stdin 无数据或非 JSON，使用默认值
+    // stdin 无数据或非 JSON
   }
 
-  const status = EVENT_TO_STATUS[eventType] || "running";
-  sendStatus(status, message);
+  const baseStatus = EVENT_TO_STATUS[event];
+  if (!baseStatus) return; // 未知事件，忽略
+
+  // ── Stop 事件特殊处理：判断是否真正完成 ──
+  if (event === "Stop") {
+    // 有 stop_hook_active → Claude 还在继续，不是真正完成
+    if (payload.stop_hook_active === true) {
+      sendStatus("running", "");
+      return;
+    }
+    // 有后台任务或 cron → 还没完成
+    const bgCount = Array.isArray(payload.background_tasks) ? payload.background_tasks.length : 0;
+    const cronCount = Array.isArray(payload.session_crons) ? payload.session_crons.length : 0;
+    if (bgCount > 0 || cronCount > 0) {
+      sendStatus("running", "");
+      return;
+    }
+    // 真正完成
+    sendStatus("completed", "");
+    return;
+  }
+
+  // ── Notification 事件：带消息内容 ──
+  if (event === "Notification") {
+    const message = payload.message || "有操作需要你的确认";
+    sendStatus("waiting", message);
+    return;
+  }
+
+  // ── 其他事件 ──
+  sendStatus(baseStatus, "");
 });
 
 function sendStatus(status, message) {
@@ -55,9 +90,7 @@ function sendStatus(status, message) {
         "Content-Length": Buffer.byteLength(data, "utf8"),
       },
     },
-    (res) => {
-      // 成功，静默退出
-    },
+    () => {},
   );
 
   req.on("error", () => {
@@ -67,12 +100,3 @@ function sendStatus(status, message) {
   req.write(data, "utf8");
   req.end();
 }
-
-// 超时保护：如果 stdin 3 秒内没有关闭，直接用 argv 参数发送
-setTimeout(() => {
-  if (!inputData) {
-    const status = process.argv[2] || "running";
-    const message = process.argv[3] || "";
-    sendStatus(status, message);
-  }
-}, 3000);

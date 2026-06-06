@@ -147,19 +147,19 @@ function startApp() {
       mainWindow.webContents.send("status-update", { status, message });
     }
 
-    if (status === STATUS.WAITING && prevStatus !== STATUS.WAITING) {
-      sendNotification(
-        "⚠️ Claude Code 需要确认",
-        message || "有操作需要你的确认",
-      );
+    // waiting + 有消息 = 真正需要用户确认（Notification 事件）→ 弹通知
+    // waiting + 无消息 = Stop 事件，Claude 本轮结束但可能继续 → 不弹通知
+    if (status === STATUS.WAITING && message && prevStatus !== STATUS.WAITING) {
+      sendNotification("⚠️ Claude Code 需要确认", message);
     }
+
     if (status === STATUS.COMPLETED && prevStatus !== STATUS.COMPLETED) {
       sendNotification("✅ Claude Code 任务完成", message || "任务已完成");
       completedTimer = setTimeout(() => {
         if (currentStatus === STATUS.COMPLETED) {
           pushStatus(STATUS.IDLE, "");
         }
-      }, 8000);
+      }, 10000);
     }
     if (status === STATUS.ERROR && prevStatus !== STATUS.ERROR) {
       sendNotification("❌ Claude Code 错误", message || "出现错误");
@@ -167,7 +167,7 @@ function startApp() {
         if (currentStatus === STATUS.ERROR) {
           pushStatus(STATUS.IDLE, "");
         }
-      }, 8000);
+      }, 10000);
     }
   }
 
