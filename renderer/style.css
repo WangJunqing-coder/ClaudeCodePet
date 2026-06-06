@@ -89,57 +89,61 @@ body {
     max-width: 200px;
     max-height: 64px;
     overflow: hidden;
-    padding: 6px 10px 8px;
+    padding: 5px 9px 7px;
 
     background: #fff;
-    color: #222;
-    font-family: "Microsoft YaHei", "SimHei", sans-serif;
+    color: #1a1a2e;
+    font-family: "Microsoft YaHei", "SimHei", "Noto Sans SC", sans-serif;
     font-size: 11px;
     font-weight: 700;
     line-height: 1.4;
-    /* 像素风：用 box-shadow 模拟 2px 边框 + 阴影 */
-    border: 2px solid #222;
+    /* 像素风边框：纯黑 2px + 右下偏移阴影 */
+    border: 2px solid #1a1a2e;
     border-radius: 0;
-    box-shadow:
-        2px 2px 0 #222,
-        inset -2px -2px 0 rgba(0, 0, 0, 0.05);
+    box-shadow: 2px 2px 0 #1a1a2e;
     image-rendering: pixelated;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s step-end;
+    transition: opacity 0.1s step-end;
     z-index: 10001;
     white-space: pre-wrap;
     word-break: break-word;
     text-align: center;
 }
 
-/* 像素风尾巴：用 4px 方块堆叠 */
+/* 像素尾巴：纯 CSS 方块阶梯，不用 rotate（避免亚像素模糊） */
 #pet-speech-bubble::before {
     content: "";
-    display: block;
     position: absolute;
-    bottom: -8px;
+    bottom: -6px;
     left: 50%;
-    transform: translateX(-50%);
-    width: 8px;
-    height: 8px;
+    margin-left: -3px;
+    /* 3 层像素阶梯：6px → 4px → 2px */
+    width: 6px;
+    height: 2px;
     background: #fff;
-    border: 2px solid #222;
-    border-top: none;
-    border-left: none;
-    transform: translateX(-50%) rotate(45deg);
-    box-shadow: 2px 2px 0 #222;
+    border-left: 2px solid #1a1a2e;
+    border-right: 2px solid #1a1a2e;
+    border-bottom: 2px solid #1a1a2e;
+    /* 用 box-shadow 画上面两层阶梯 */
+    box-shadow:
+        -2px -2px 0 0 #fff,
+         0  -2px 0 0 #fff,
+        -2px -2px 0 0 #1a1a2e,  /* 左边框 */
+         2px -2px 0 0 #1a1a2e,  /* 右边框 */
+        -2px -4px 0 0 #fff,
+         0  -4px 0 0 #fff;
 }
 
+/* 遮住尾巴和气泡之间的边框缝隙 */
 #pet-speech-bubble::after {
     content: "";
-    display: block;
     position: absolute;
-    bottom: -2px;
+    bottom: -1px;
     left: 50%;
-    transform: translateX(-50%);
-    width: 12px;
-    height: 4px;
+    margin-left: -5px;
+    width: 10px;
+    height: 3px;
     background: #fff;
 }
 
@@ -148,55 +152,39 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
-/* 打字指示器（像素方块） */
+/* 打字指示器（像素方块弹跳） */
 .bubble-typing {
     display: inline-flex;
-    gap: 4px;
+    gap: 3px;
     align-items: flex-end;
-    height: 12px;
+    height: 14px;
     padding: 0 2px;
 }
 
 .bubble-typing span {
+    display: block;
     width: 4px;
     height: 4px;
-    background: #222;
-    animation: typing-pixel 1s steps(2, end) infinite;
+    background: #1a1a2e;
+    animation: typing-pixel 0.9s steps(1, end) infinite;
 }
 
 .bubble-typing span:nth-child(2) {
-    animation-delay: 0.2s;
+    animation-delay: 0.3s;
 }
 
 .bubble-typing span:nth-child(3) {
-    animation-delay: 0.4s;
+    animation-delay: 0.6s;
 }
 
 @keyframes typing-pixel {
-    0%, 60%, 100% {
-        opacity: 0.2;
+    0%, 100% {
+        opacity: 0.15;
+        transform: none;
     }
-    30% {
+    50% {
         opacity: 1;
-    }
-}
-
-.bubble-typing span:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.bubble-typing span:nth-child(3) {
-    animation-delay: 0.4s;
-}
-
-@keyframes typing-dot {
-    0%, 60%, 100% {
-        opacity: 0.3;
-        transform: translateY(0);
-    }
-    30% {
-        opacity: 1;
-        transform: translateY(-3px);
+        transform: translateY(-4px);
     }
 }
 
