@@ -97,9 +97,9 @@ body {
     font-size: 11px;
     font-weight: 700;
     line-height: 1.4;
-    /* 像素风边框：纯黑 2px + 右下偏移阴影 */
+    /* 像素风边框：圆角 + 偏移阴影 */
     border: 2px solid #1a1a2e;
-    border-radius: 0;
+    border-radius: 6px;
     box-shadow: 2px 2px 0 #1a1a2e;
     image-rendering: pixelated;
     pointer-events: none;
@@ -111,40 +111,31 @@ body {
     text-align: center;
 }
 
-/* 像素尾巴：纯 CSS 方块阶梯，不用 rotate（避免亚像素模糊） */
+/* 小三角尾巴 */
 #pet-speech-bubble::before {
     content: "";
     position: absolute;
-    bottom: -6px;
+    bottom: -7px;
     left: 50%;
-    margin-left: -3px;
-    /* 3 层像素阶梯：6px → 4px → 2px */
-    width: 6px;
-    height: 2px;
-    background: #fff;
-    border-left: 2px solid #1a1a2e;
-    border-right: 2px solid #1a1a2e;
-    border-bottom: 2px solid #1a1a2e;
-    /* 用 box-shadow 画上面两层阶梯 */
-    box-shadow:
-        -2px -2px 0 0 #fff,
-         0  -2px 0 0 #fff,
-        -2px -2px 0 0 #1a1a2e,  /* 左边框 */
-         2px -2px 0 0 #1a1a2e,  /* 右边框 */
-        -2px -4px 0 0 #fff,
-         0  -4px 0 0 #fff;
+    margin-left: -6px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 7px solid #1a1a2e;
 }
 
-/* 遮住尾巴和气泡之间的边框缝隙 */
 #pet-speech-bubble::after {
     content: "";
     position: absolute;
-    bottom: -1px;
+    bottom: -4px;
     left: 50%;
-    margin-left: -5px;
-    width: 10px;
-    height: 3px;
-    background: #fff;
+    margin-left: -4px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #fff;
 }
 
 #pet-speech-bubble.show-bubble {
