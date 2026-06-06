@@ -183,14 +183,8 @@ function startApp() {
 
   // ─── 自动配置 Claude Code hooks ───────────────────
   function autoConfigHooks() {
-    let claudeDir;
-    if (process.platform === "win32") {
-      claudeDir = path.join(os.homedir(), ".claude");
-    } else {
-      claudeDir = path.join(os.homedir(), ".claude");
-    }
-
-    const settingsPath = path.join(claudeDir, "settings.local.json");
+    const claudeDir = path.join(os.homedir(), ".claude");
+    const settingsPath = path.join(claudeDir, "settings.json");
     let settings;
     try {
       settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -201,40 +195,67 @@ function startApp() {
     if (!settings.hooks) settings.hooks = {};
 
     const hooksDir = path.join(__dirname, "hooks");
-    const notifyScript = process.platform === "win32"
-      ? `cmd /c "${path.join(hooksDir, "setup.cmd")}"`
-      : path.join(hooksDir, "setup.sh");
+    const notifyScript = path.join(hooksDir, "notify.js");
+    const marker = "ccpet-notify";
 
-    const hookList = [
-      {
-        hooks: [
-          {
-            type: "command",
-            command: `node "${path.join(hooksDir, "notify.js")}"`,
-          },
-        ],
-      },
+    // 每个事件需要单独的命令（事件名作为 argv[2] 传入）
+    // 参考 clawd-on-desk 的 buildCommandHookSpec
+    const events = [
+      "PreToolUse", "PostToolUse", "PostToolUseFailure",
+      "Stop", "StopFailure",
+      "Notification", "Elicitation",
+      "SubagentStart", "SubagentStop",
+      "PreCompact", "PostCompact",
+      "SessionStart", "SessionEnd",
     ];
 
     let changed = false;
-    const events = ["PreToolUse", "PostToolUse", "Stop", "Notification"];
 
     for (const event of events) {
-      if (!settings.hooks[event]) {
-        settings.hooks[event] = hookList;
-        changed = true;
-      } else {
-        const hasHook = settings.hooks[event].some(
-          (h) =>
-            h.hooks &&
-            h.hooks.some(
-              (hh) => hh.command && hh.command.includes("notify.js"),
-            ),
+      if (!Array.isArray(settings.hooks[event])) {
+        settings.hooks[event] = [];
+      }
+
+      // 检查是否已有我们的 hook（通过 marker 识别）
+      const existing = settings.hooks[event].find(
+        (entry) =>
+          entry.hooks &&
+          entry.hooks.some(
+            (h) => h.command && h.command.includes(marker),
+          ),
+      );
+
+      if (existing) {
+        // 更新已有的 hook（确保命令格式正确）
+        const hook = existing.hooks.find(
+          (h) => h.command && h.command.includes(marker),
         );
-        if (!hasHook) {
-          settings.hooks[event].push(...hookList);
+        const newCommand = process.platform === "win32"
+          ? `& "node" "${notifyScript}" ${event}`
+          : `node "${notifyScript}" ${event}`;
+        if (hook.command !== newCommand) {
+          hook.command = newCommand;
+          if (process.platform === "win32") hook.shell = "powershell";
           changed = true;
         }
+      } else {
+        // 注册新 hook
+        const hookDef = {
+          type: "command",
+          command: process.platform === "win32"
+            ? `& "node" "${notifyScript}" ${event}`
+            : `node "${notifyScript}" ${event}`,
+          async: true,
+          timeout: 5,
+        };
+        if (process.platform === "win32") {
+          hookDef.shell = "powershell";
+        }
+        settings.hooks[event].push({
+          matcher: "",
+          hooks: [hookDef],
+        });
+        changed = true;
       }
     }
 

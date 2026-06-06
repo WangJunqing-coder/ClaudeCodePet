@@ -25,9 +25,10 @@ const EVENT_TO_STATUS = {
   WorktreeCreate: "running",
 };
 
-let done = false;
+// 旧格式兼容：直接传了 status 而非事件名
+const LEGACY_STATUS = new Set(["idle", "running", "waiting", "completed", "error"]);
 
-// 从 stdin 读取 JSON payload
+let done = false;
 let inputData = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (inputData += chunk));
@@ -37,7 +38,7 @@ process.stdin.on("end", () => {
   processEvent();
 });
 
-// 超时回退：stdin 2秒内没关闭就直接处理（防止 Claude Code 不关闭 stdin 导致卡住）
+// 超时回退：stdin 2 秒内没关闭就直接处理
 setTimeout(() => {
   if (done) return;
   done = true;
@@ -45,30 +46,35 @@ setTimeout(() => {
 }, 2000);
 
 function processEvent() {
-  // 事件名从 argv[2] 获取，没有则尝试从 stdin JSON 的 type 字段获取
-  let event = process.argv[2] || "";
-  let payload = {};
+  const argv2 = process.argv[2] || "";
 
+  let payload = {};
   try {
     payload = JSON.parse(inputData);
-  } catch (e) {
-    // stdin 无数据或非 JSON
+  } catch (e) {}
+
+  // ── 旧格式兼容：argv[2] 直接是 status（running/completed/error） ──
+  if (LEGACY_STATUS.has(argv2)) {
+    const message = process.argv[3] || "";
+    sendStatus(argv2, message);
+    return;
   }
 
-  // 如果 argv 没有事件名，从 payload 里取
+  // ── 新格式：argv[2] 是事件名 ──
+  let event = argv2;
   if (!event) {
     event = payload.type || payload.hook_event_type || "";
   }
 
   const baseStatus = EVENT_TO_STATUS[event];
 
-  // 未知事件 → 默认 running（安全兜底，避免什么都不显示）
+  // 未知事件 → 默认 running（兜底）
   if (!baseStatus) {
     sendStatus("running", "");
     return;
   }
 
-  // ── Stop 事件特殊处理 ──
+  // ── Stop 事件：判断是否真正完成 ──
   if (event === "Stop") {
     if (payload.stop_hook_active === true) {
       sendStatus("running", "");
