@@ -15,7 +15,7 @@ const EVENT_TO_STATUS = {
   PostToolUseFailure: "error",
   Stop: "waiting",
   StopFailure: "error",
-  Notification: "running",
+  Notification: "waiting",
   Elicitation: "waiting",
   SubagentStart: "running",
   SubagentStop: "running",
@@ -122,6 +122,15 @@ function processEvent() {
     const detail = formatToolDetail(toolName, payload.tool_input || {});
     const message = detail ? `${toolName}: ${detail}` : toolName;
     sendStatus("running", message);
+    return;
+  }
+
+  // ── Notification：有消息才发 waiting（需要确认），无消息忽略 ──
+  if (event === "Notification") {
+    const msg = payload.message || "";
+    if (msg) {
+      sendStatus("waiting", msg);
+    }
     return;
   }
 
